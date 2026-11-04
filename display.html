@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>출석 QR 화면</title>
+<style>
+  :root { --bg:#ffffff; --ink:#1c2230; --sub:#596273; --line:#d3d8e0; --acc:#1f5fbf;
+          --stop:#b42318; --soft:#f2f4f7; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  h1 { font-size: 24px; margin: 0 16px 0 0; }
+  input { font-size: 17px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; min-width: 200px; }
+  button { font-size: 17px; font-weight: 700; padding: 10px 16px; border: 0; border-radius: 8px;
+           background: var(--soft); color: var(--ink); cursor: pointer; }
+  button.main { background: var(--acc); color: #fff; }
+  button.stop { background: var(--stop); color: #fff; }
+  .status { color: var(--sub); font-size: 15px; margin: 10px 0 0; }
+  #qrbox { text-align: center; margin-top: 18px; }
+  #qr { display: inline-block; padding: 16px; background: #fff; }
+  #qr img, #qr canvas { display: block; }
+  .timer { width: min(560px, 90vw); height: 10px; margin: 6px auto 0; background: var(--soft); border-radius: 5px; overflow: hidden; }
+  .timer i { display: block; height: 100%; width: 100%; background: var(--acc); }
+  .guide { font-size: 22px; margin: 14px 0 0; }
+  .count { font-size: 40px; font-weight: 800; margin: 6px 0 0; }
+  #msg { margin-top: 16px; font-size: 17px; line-height: 1.6; white-space: pre-line; }
+  #login { margin-top: 30px; }
+  body.full .bar, body.full .status { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="bar" id="ctrl">
+    <h1>공학전공탐색 출석</h1>
+    <input id="label" placeholder="회차 이름 (예: 11월 11일 출석)">
+    <button class="main" id="start">출석 시작</button>
+    <button class="stop" id="stop">출석 마감</button>
+    <button id="room">지금 위치를 강의실로 저장</button>
+    <button id="full">전체 화면</button>
+  </div>
+  <p class="status" id="status">서버에 연결하는 중입니다.</p>
+
+  <div id="login" hidden>
+    <p>구글 시트의 '설정' 시트에 있는 교수 화면 비밀번호를 입력하세요.</p>
+    <input id="key" autocomplete="off"> <button class="main" id="keyOk">확인</button>
+  </div>
+
+  <div id="qrbox" hidden>
+    <div id="qr"></div>
+    <div class="timer"><i id="timer"></i></div>
+    <p class="guide">휴대전화 카메라로 QR 코드를 찍으세요. 코드는 10초마다 바뀝니다.</p>
+    <p class="count" id="count">0명 출석</p>
+  </div>
+
+  <div id="msg"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="config.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const api = window.attendApi, store = window.attendStore;
+  const studentUrl = new URL('index.html', location.href).href;
+  let key = store('gast_admin') || '';
+  let offset = 0, timer = null;
+
+  const say = t => { $('msg').textContent = t || ''; };
+
+  function needLogin(m) {
+    clearTimeout(timer);
+    $('login').hidden = false; $('qrbox').hidden = true;
+    $('status').textContent = m || '비밀번호가 필요합니다.';
+  }
+
+  function drawQr(url) {
+    const size = Math.max(240, Math.min(560, Math.floor(Math.min(innerWidth, innerHeight) * 0.62)));
+    $('qr').innerHTML = '';
+    new QRCode($('qr'), { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+  }
+
+  function runTimer(slotEnd) {
+    const left = Math.max(0, slotEnd - (Date.now() + offset));
+    const bar = $('timer');
+    bar.style.transition = 'none'; bar.style.width = (left / 100) + '%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      bar.style.transition = 'width ' + left + 'ms linear'; bar.style.width = '0%';
+    }));
+  }
+
+  function render(r) {
+    $('login').hidden = true;
+    const roomText = r.room ? '강의실 위치가 저장되어 있습니다.' : '강의실 위치가 아직 없습니다. 강의실에서 위치 저장을 눌러 주세요.';
+    if (r.session && r.token) {
+      $('status').textContent = '진행 중: ' + r.session + ' · ' + roomText;
+      drawQr(studentUrl + '?t=' + r.token);
+      runTimer(r.slotEnd);
+      $('count').textContent = (r.count || 0) + '명 출석';
+      $('qrbox').hidden = false;
+    } else {
+      $('status').textContent = '출석이 열려 있지 않습니다. · ' + roomText;
+      $('qrbox').hidden = true;
+    }
+  }
+
+  async function tick() {
+    clearTimeout(timer);
+    if (!key) return needLogin();
+    try {
+      const r = await api({ action: 'adminState', key: key });
+      if (!r.ok) { if (r.auth === false) return needLogin(r.msg); throw new Error(r.msg); }
+      offset = r.serverNow - Date.now();
+      render(r);
+      if (r.session) timer = setTimeout(tick, Math.max(500, r.slotEnd - (Date.now() + offset) + 300));
+    } catch (e) {
+      $('status').textContent = '서버 연결이 끊겼습니다. 다시 시도하는 중입니다.';
+      timer = setTimeout(tick, 3000);
+    }
+  }
+
+  $('keyOk').onclick = () => { key = $('key').value.trim(); store('gast_admin', key); say(''); tick(); };
+
+  $('start').onclick = async () => {
+    say('');
+    try {
+      const r = await api({ action: 'adminStart', key: key, label: $('label').value });
+      if (!r.ok) { if (r.auth === false) return needLogin(r.msg); return say(r.msg); }
+      tick();
+    } catch (e) { say('서버에 연결하지 못했습니다.'); }
+  };
+
+  $('stop').onclick = async () => {
+    if (!confirm('출석을 마감할까요? 마감한 뒤에는 QR 코드로 출석할 수 없습니다.')) return;
+    clearTimeout(timer);
+    say('마감하고 점검하는 중입니다. 몇 초 걸립니다.');
+    try {
+      const r = await api({ action: 'adminStop', key: key });
+      if (!r.ok) { if (r.auth === false) return needLogin(r.msg); return say(r.msg); }
+      say((r.session ? r.session + ' 마감\n' : '') + '출석 ' + r.total + '명 중 확인 필요 ' + r.flagged + '명\n' +
+          '구글 시트 출석기록에서 확인 결과가 "확인 필요"인 행과 사유를 보시면 됩니다.');
+      tick();
+    } catch (e) { say('서버에 연결하지 못했습니다. 다시 눌러 주세요.'); }
+  };
+
+  $('room').onclick = () => {
+    if (!navigator.geolocation) return say('이 브라우저는 위치 확인을 지원하지 않습니다.');
+    say('위치를 확인하는 중입니다.');
+    navigator.geolocation.getCurrentPosition(async p => {
+      const acc = Math.round(p.coords.accuracy);
+      try {
+        const r = await api({ action: 'adminRoom', key: key, lat: p.coords.latitude, lng: p.coords.longitude });
+        if (!r.ok) return say(r.msg);
+        say('강의실 위치를 저장했습니다. 오차 약 ' + acc + 'm' +
+            (acc > 100 ? '\n오차가 큽니다. 구글 지도에서 강의실 건물 좌표를 확인해 설정 시트에 직접 넣는 편이 정확합니다.' : ''));
+        tick();
+      } catch (e) { say('서버에 연결하지 못했습니다.'); }
+    }, () => say('위치를 확인하지 못했습니다. 브라우저의 위치 권한을 허용해 주세요.'),
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  };
+
+  $('full').onclick = () => {
+    document.body.classList.add('full');
+    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+  };
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.body.classList.remove('full'); });
+
+  tick();
+</script>
+</body>
+</html>

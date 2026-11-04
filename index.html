@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>공학전공탐색 출석</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --ink:#1c2230; --sub:#596273; --line:#c9ced8;
+          --acc:#1f5fbf; --ok:#0d7348; --okbg:#e2f3ea; --err:#b42318; --errbg:#fdecea; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  main { max-width: 440px; margin: 0 auto; padding: 28px 16px 40px; }
+  h1 { font-size: 23px; margin: 0 0 6px; }
+  .sub { color: var(--sub); font-size: 16px; margin: 0 0 20px; line-height: 1.5; }
+  .card { background: var(--card); border-radius: 14px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  label { display: block; font-size: 16px; font-weight: 700; margin: 12px 0 6px; }
+  input { width: 100%; font-size: 21px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+  button { width: 100%; margin-top: 22px; font-size: 21px; font-weight: 700; padding: 16px;
+           border: 0; border-radius: 12px; background: var(--acc); color: #fff; }
+  button:disabled { opacity: .55; }
+  .note { font-size: 14px; color: var(--sub); margin: 14px 0 0; line-height: 1.55; }
+  .msg { margin-top: 16px; padding: 18px; border-radius: 12px; font-size: 18px; line-height: 1.5; }
+  .msg.ok { background: var(--okbg); color: var(--ok); }
+  .msg.err { background: var(--errbg); color: var(--err); }
+  .big { display: block; font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>공학전공탐색 출석</h1>
+  <p class="sub" id="state">QR 코드를 확인하는 중입니다.</p>
+
+  <div class="card" id="formCard" hidden>
+    <label for="sid">학번</label>
+    <input id="sid" inputmode="numeric" autocomplete="off" maxlength="10">
+    <label for="name">이름</label>
+    <input id="name" autocomplete="off">
+    <button id="go">출석하기</button>
+    <p class="note">처음 한 번만 입력하면 다음부터는 자동으로 채워집니다.<br>
+      위치 권한을 묻는 창이 뜨면 <b>허용</b>을 눌러 주세요. 허용하지 않으면 출석이 확인 대상으로 분류됩니다.<br>
+      학교 와이파이에 연결한 상태로 출석해 주세요.</p>
+  </div>
+
+  <div id="result"></div>
+</main>
+
+<script src="config.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const api = window.attendApi, store = window.attendStore;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const show = (kind, html) => { $('result').innerHTML = '<div class="msg ' + kind + '">' + html + '</div>'; };
+
+  function deviceId() {
+    let d = store('gast_dev');
+    if (!d) {
+      d = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).slice(2);
+      store('gast_dev', d);
+    }
+    return d;
+  }
+  const dev = deviceId();
+
+  // 페이지가 열리자마자 위치와 접속 주소를 함께 확인한다.
+  const geo = new Promise(res => {
+    if (!navigator.geolocation) return res({ err: '지원 안 함' });
+    navigator.geolocation.getCurrentPosition(
+      p => res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
+      e => res({ err: ({ 1: '권한 거부', 2: '위치 확인 실패', 3: '시간 초과' })[e.code] || '오류' }),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+  const ipP = Promise.race([
+    fetch('https://api.ipify.org?format=json').then(r => r.json()).then(j => j.ip).catch(() => ''),
+    new Promise(r => setTimeout(() => r(''), 4000)),
+  ]);
+
+  let ticket = null;
+
+  (async () => {
+    const t = new URLSearchParams(location.search).get('t');
+    if (!t) { $('state').textContent = '강의실 화면의 QR 코드를 휴대전화 카메라로 찍어서 들어와 주세요.'; return; }
+    history.replaceState(null, '', location.pathname);
+    try {
+      const r = await api({ action: 'open', t: t });
+      if (!r.ok) { $('state').textContent = ''; show('err', esc(r.msg)); return; }
+      ticket = r.ticket;
+    } catch (e) {
+      $('state').textContent = '';
+      show('err', '서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 QR 코드를 다시 찍어 주세요.');
+      return;
+    }
+    $('sid').value = store('gast_sid') || '';
+    $('name').value = store('gast_name') || '';
+    $('state').textContent = '학번과 이름을 확인하고 출석하기를 눌러 주세요.';
+    $('formCard').hidden = false;
+  })();
+
+  function resetButton() { $('go').disabled = false; $('go').textContent = '출석하기'; }
+
+  $('go').onclick = async () => {
+    const sid = $('sid').value.replace(/\D/g, ''), name = $('name').value.trim();
+    if (!/^\d{8,10}$/.test(sid)) return show('err', '학번을 숫자로 정확히 입력해 주세요.');
+    if (!name) return show('err', '이름을 입력해 주세요.');
+    $('go').disabled = true; $('go').textContent = '확인하는 중입니다';
+    const g = await geo, ip = await ipP;
+    try {
+      const r = await api({ action: 'checkin', ticket: ticket, sid: sid, name: name, dev: dev,
+        lat: g.lat, lng: g.lng, acc: g.acc, geoErr: g.err || '', ip: ip });
+      if (!r.ok) { show('err', esc(r.msg)); resetButton(); return; }
+      store('gast_sid', sid); store('gast_name', name);
+      $('formCard').hidden = true; $('state').textContent = '';
+      show('ok', '<span class="big">' + (r.already ? '이미 출석되어 있습니다' : '출석되었습니다') + '</span>' +
+        esc(r.name) + ' · ' + esc(r.time));
+    } catch (e) {
+      show('err', '서버에 연결하지 못했습니다. 잠시 뒤 출석하기를 다시 눌러 주세요.');
+      resetButton();
+    }
+  };
+</script>
+</body>
+</html>
