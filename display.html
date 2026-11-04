@@ -20,8 +20,8 @@
   button.stop { background: var(--stop); color: #fff; }
   .status { color: var(--sub); font-size: 15px; margin: 10px 0 0; }
   #qrbox { text-align: center; margin-top: 18px; }
-  #qr { display: inline-block; padding: 16px; background: #fff; }
-  #qr img, #qr canvas { display: block; }
+  #qr { display: inline-block; background: #fff; }
+  #qr img, #qr canvas { display: block; image-rendering: pixelated; }
   .timer { width: min(560px, 90vw); height: 10px; margin: 6px auto 0; background: var(--soft); border-radius: 5px; overflow: hidden; }
   .timer i { display: block; height: 100%; width: 100%; background: var(--acc); }
   .guide { font-size: 22px; margin: 14px 0 0; }
@@ -75,10 +75,18 @@
     $('status').textContent = m || '비밀번호가 필요합니다.';
   }
 
+  // 휴대전화 카메라가 화면의 QR 코드를 잘 읽도록 한 칸의 크기를 정수 픽셀로 맞추고
+  // 둘레에 칸 4개 너비의 흰 여백을 둔다.
   function drawQr(url) {
-    const size = Math.max(240, Math.min(560, Math.floor(Math.min(innerWidth, innerHeight) * 0.62)));
-    $('qr').innerHTML = '';
-    new QRCode($('qr'), { text: url, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+    const target = Math.max(260, Math.min(720, Math.floor(Math.min(innerWidth, innerHeight * 1.1) * 0.7)));
+    const box = $('qr');
+    box.innerHTML = '';
+    let qr = new QRCode(box, { text: url, width: target, height: target, correctLevel: QRCode.CorrectLevel.M });
+    const n = qr._oQRCode ? qr._oQRCode.getModuleCount() : 33;
+    const cell = Math.max(6, Math.floor(target / (n + 8)));
+    box.innerHTML = '';
+    qr = new QRCode(box, { text: url, width: cell * n, height: cell * n, correctLevel: QRCode.CorrectLevel.M });
+    box.style.padding = (cell * 4) + 'px';
   }
 
   function runTimer(slotEnd) {
