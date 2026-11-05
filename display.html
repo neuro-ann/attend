@@ -19,13 +19,13 @@
   button.main { background: var(--acc); color: #fff; }
   button.stop { background: var(--stop); color: #fff; }
   .status { color: var(--sub); font-size: 15px; margin: 10px 0 0; }
-  #qrbox { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: center; margin-top: 18px; }
+  #qrbox { display: flex; flex-wrap: wrap; gap: 56px; justify-content: center; align-items: center; margin-top: 18px; }
   #qrbox[hidden] { display: none; }
   .qrcol { text-align: center; }
   #qr { display: inline-block; background: #fff; }
   #qr img, #qr canvas { display: block; image-rendering: pixelated; }
-  .timer { height: 10px; margin: 6px auto 0; background: var(--soft); border-radius: 5px; overflow: hidden; }
-  .timer i { display: block; height: 100%; width: 100%; background: var(--ink); }
+  .timer { height: 8px; margin: 16px auto 0; background: var(--soft); border-radius: 4px; overflow: hidden; }
+  .timer i { display: block; height: 100%; width: 100%; background: #8aa4c8; }
   .guide { font-size: 20px; margin: 12px 0 0; color: var(--sub); }
   .side { display: flex; flex-direction: column; gap: 22px; min-width: 240px; }
   .tile { border-radius: 16px; padding: 20px 24px; }
@@ -86,7 +86,8 @@
 <script>
   const $ = id => document.getElementById(id);
   const api = window.attendApi, store = window.attendStore;
-  const studentUrl = new URL('index.html', location.href).href;
+  // 주소를 짧게 할수록 QR 코드의 칸 수가 줄어 칸 하나가 커지고 휴대전화가 읽기 쉬워진다.
+  const studentUrl = new URL('./', location.href).href;
   let key = store('gast_admin') || '';
   let offset = 0, timer = null;
 
@@ -101,14 +102,14 @@
   // 휴대전화 카메라가 화면의 QR 코드를 잘 읽도록 한 칸의 크기를 정수 픽셀로 맞추고
   // 둘레에 칸 4개 너비의 흰 여백을 둔다.
   function drawQr(url) {
-    const target = Math.max(260, Math.min(700, Math.floor(Math.min(innerWidth * 0.55, innerHeight * 0.72))));
+    const target = Math.max(300, Math.min(800, Math.floor(Math.min(innerWidth * 0.6, innerHeight * 0.82))));
     const box = $('qr');
     box.innerHTML = '';
-    let qr = new QRCode(box, { text: url, width: target, height: target, correctLevel: QRCode.CorrectLevel.M });
+    let qr = new QRCode(box, { text: url, width: target, height: target, correctLevel: QRCode.CorrectLevel.L });
     const n = qr._oQRCode ? qr._oQRCode.getModuleCount() : 33;
     const cell = Math.max(6, Math.floor(target / (n + 8)));
     box.innerHTML = '';
-    qr = new QRCode(box, { text: url, width: cell * n, height: cell * n, correctLevel: QRCode.CorrectLevel.M });
+    qr = new QRCode(box, { text: url, width: cell * n, height: cell * n, correctLevel: QRCode.CorrectLevel.L });
     box.style.padding = (cell * 4) + 'px';
     $('timerBox').style.width = (cell * (n + 8)) + 'px';
   }
