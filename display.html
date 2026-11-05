@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>출석 QR 화면</title>
+<title>전자출석 QR 화면</title>
 <style>
   :root { --bg:#ffffff; --ink:#1c2230; --sub:#596273; --line:#d3d8e0; --acc:#1f5fbf;
           --stop:#b42318; --soft:#f2f4f7; }
@@ -19,13 +19,24 @@
   button.main { background: var(--acc); color: #fff; }
   button.stop { background: var(--stop); color: #fff; }
   .status { color: var(--sub); font-size: 15px; margin: 10px 0 0; }
-  #qrbox { text-align: center; margin-top: 18px; }
+  #qrbox { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: center; margin-top: 18px; }
+  #qrbox[hidden] { display: none; }
+  .qrcol { text-align: center; }
   #qr { display: inline-block; background: #fff; }
   #qr img, #qr canvas { display: block; image-rendering: pixelated; }
-  .timer { width: min(560px, 90vw); height: 10px; margin: 6px auto 0; background: var(--soft); border-radius: 5px; overflow: hidden; }
-  .timer i { display: block; height: 100%; width: 100%; background: var(--acc); }
-  .guide { font-size: 22px; margin: 14px 0 0; }
-  .count { font-size: 40px; font-weight: 800; margin: 6px 0 0; }
+  .timer { height: 10px; margin: 6px auto 0; background: var(--soft); border-radius: 5px; overflow: hidden; }
+  .timer i { display: block; height: 100%; width: 100%; background: var(--ink); }
+  .guide { font-size: 20px; margin: 12px 0 0; color: var(--sub); }
+  .side { display: flex; flex-direction: column; gap: 22px; min-width: 240px; }
+  .tile { border-radius: 16px; padding: 20px 24px; }
+  .tile .lab { font-size: 18px; margin: 0; }
+  .color { color: #fff; }
+  .color .val { font-size: 46px; font-weight: 800; margin: 4px 0 0; }
+  .countTile { background: var(--soft); }
+  .countTile .val { font-size: 64px; font-weight: 800; margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+  .countTile .val small { font-size: 26px; font-weight: 700; margin-left: 4px; }
+  .clock { font-size: 26px; font-weight: 700; color: var(--sub); font-variant-numeric: tabular-nums;
+           font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; margin: 0; }
   #msg { margin-top: 16px; font-size: 17px; line-height: 1.6; white-space: pre-line; }
   #login { margin-top: 30px; }
   body.full .bar, body.full .status { display: none; }
@@ -34,8 +45,8 @@
 <body>
 <main>
   <div class="bar" id="ctrl">
-    <h1>공학전공탐색 출석</h1>
-    <input id="label" placeholder="회차 이름 (예: 11월 11일 출석)">
+    <h1>전자출석</h1>
+    <input id="label" placeholder="회차 이름 (예: 공학탐색 11월 11일)">
     <button class="main" id="start">출석 시작</button>
     <button class="stop" id="stop">출석 마감</button>
     <button id="room">지금 위치를 강의실로 저장</button>
@@ -49,10 +60,22 @@
   </div>
 
   <div id="qrbox" hidden>
-    <div id="qr"></div>
-    <div class="timer"><i id="timer"></i></div>
-    <p class="guide">휴대전화 카메라로 QR 코드를 찍으세요. 코드는 10초마다 바뀝니다.</p>
-    <p class="count" id="count">0명 출석</p>
+    <div class="qrcol">
+      <div id="qr"></div>
+      <div class="timer" id="timerBox"><i id="timer"></i></div>
+      <p class="guide">휴대전화 기본 카메라로 찍으세요 · 10초마다 바뀜</p>
+    </div>
+    <div class="side">
+      <div class="tile color" id="colorTile">
+        <p class="lab">오늘의 색</p>
+        <p class="val" id="colorName"></p>
+      </div>
+      <div class="tile countTile">
+        <p class="lab">출석</p>
+        <p class="val"><span id="count">0</span><small>명</small></p>
+      </div>
+      <p class="clock" id="clock"></p>
+    </div>
   </div>
 
   <div id="msg"></div>
@@ -78,7 +101,7 @@
   // 휴대전화 카메라가 화면의 QR 코드를 잘 읽도록 한 칸의 크기를 정수 픽셀로 맞추고
   // 둘레에 칸 4개 너비의 흰 여백을 둔다.
   function drawQr(url) {
-    const target = Math.max(260, Math.min(720, Math.floor(Math.min(innerWidth, innerHeight * 1.1) * 0.7)));
+    const target = Math.max(260, Math.min(700, Math.floor(Math.min(innerWidth * 0.55, innerHeight * 0.72))));
     const box = $('qr');
     box.innerHTML = '';
     let qr = new QRCode(box, { text: url, width: target, height: target, correctLevel: QRCode.CorrectLevel.M });
@@ -87,7 +110,16 @@
     box.innerHTML = '';
     qr = new QRCode(box, { text: url, width: cell * n, height: cell * n, correctLevel: QRCode.CorrectLevel.M });
     box.style.padding = (cell * 4) + 'px';
+    $('timerBox').style.width = (cell * (n + 8)) + 'px';
   }
+
+  function paintColor() {
+    const c = window.todayColor();
+    $('colorTile').style.background = c.hex;
+    $('colorName').textContent = c.name;
+    $('clock').textContent = window.kstClock();
+  }
+  paintColor(); setInterval(paintColor, 1000);
 
   function runTimer(slotEnd) {
     const left = Math.max(0, slotEnd - (Date.now() + offset));
@@ -105,7 +137,7 @@
       $('status').textContent = '진행 중: ' + r.session + ' · ' + roomText;
       drawQr(studentUrl + '?t=' + r.token);
       runTimer(r.slotEnd);
-      $('count').textContent = (r.count || 0) + '명 출석';
+      $('count').textContent = r.count || 0;
       $('qrbox').hidden = false;
     } else {
       $('status').textContent = '출석이 열려 있지 않습니다. · ' + roomText;

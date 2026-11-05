@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>공학전공탐색 출석</title>
+<title>전자출석</title>
 <style>
   :root { --bg:#f5f6f8; --card:#fff; --ink:#1c2230; --sub:#596273; --line:#c9ced8;
           --acc:#1f5fbf; --ok:#0d7348; --okbg:#e2f3ea; --err:#b42318; --errbg:#fdecea; }
@@ -24,11 +24,27 @@
   .msg.ok { background: var(--okbg); color: var(--ok); }
   .msg.err { background: var(--errbg); color: var(--err); }
   .big { display: block; font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  #done { position: fixed; inset: 0; color: #fff; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; text-align: center; padding: 24px 16px; }
+  #done[hidden] { display: none; }
+  .mark { width: 84px; height: 84px; border-radius: 50%; border: 5px solid rgba(255,255,255,.9);
+          display: flex; align-items: center; justify-content: center; }
+  .mark svg { width: 46px; height: 46px; }
+  .d-title { font-size: 30px; font-weight: 800; margin: 18px 0 0; }
+  .d-name { font-size: 40px; font-weight: 800; margin: 10px 0 0; letter-spacing: 0.02em; }
+  .d-at { font-size: 17px; margin: 6px 0 0; opacity: .9; }
+  .d-clock { font-size: 56px; font-weight: 800; margin: 34px 0 0; font-variant-numeric: tabular-nums;
+             font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .d-live { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; margin: 4px 0 0; }
+  .d-live i { width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
+  .d-color { margin: 30px 0 0; font-size: 17px; padding: 10px 18px; border-radius: 999px;
+             background: rgba(255,255,255,.18); }
+  @keyframes blink { 50% { opacity: .2; } }
 </style>
 </head>
 <body>
 <main>
-  <h1>공학전공탐색 출석</h1>
+  <h1>전자출석</h1>
   <p class="sub" id="state">QR 코드를 확인하는 중입니다.</p>
 
   <div class="card" id="formCard" hidden>
@@ -44,6 +60,16 @@
 
   <div id="result"></div>
 </main>
+
+<div id="done" hidden>
+  <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <p class="d-title" id="dTitle">출석 완료</p>
+  <p class="d-name" id="dName"></p>
+  <p class="d-at" id="dAt"></p>
+  <p class="d-clock" id="dClock"></p>
+  <p class="d-live"><i></i>현재 시각</p>
+  <p class="d-color" id="dColor"></p>
+</div>
 
 <script src="config.js"></script>
 <script>
@@ -97,6 +123,22 @@
     $('formCard').hidden = false;
   })();
 
+  // 출석에 성공하면 화면 전체를 오늘의 색으로 바꾸고 현재 시각을 초 단위로 보여 준다.
+  // 교수가 화면을 보고 강의실 화면의 색과 같은지, 시계가 움직이는지 확인할 수 있다.
+  function showDone(r) {
+    const c = window.todayColor();
+    document.body.style.background = c.hex;
+    document.querySelector('meta[name=viewport]').insertAdjacentHTML('afterend', '<meta name="theme-color" content="' + c.hex + '">');
+    $('done').style.background = c.hex;
+    $('dTitle').textContent = r.already ? '이미 출석되어 있습니다' : '출석 완료';
+    $('dName').textContent = r.name;
+    $('dAt').textContent = '출석 시각 ' + r.time;
+    $('dColor').textContent = '오늘의 색: ' + c.name;
+    const tickClock = () => { $('dClock').textContent = window.kstClock(); };
+    tickClock(); setInterval(tickClock, 1000);
+    $('done').hidden = false;
+  }
+
   function resetButton() { $('go').disabled = false; $('go').textContent = '출석하기'; }
 
   $('go').onclick = async () => {
@@ -110,9 +152,7 @@
         lat: g.lat, lng: g.lng, acc: g.acc, geoErr: g.err || '', ip: ip });
       if (!r.ok) { show('err', esc(r.msg)); resetButton(); return; }
       store('gast_sid', sid); store('gast_name', name);
-      $('formCard').hidden = true; $('state').textContent = '';
-      show('ok', '<span class="big">' + (r.already ? '이미 출석되어 있습니다' : '출석되었습니다') + '</span>' +
-        esc(r.name) + ' · ' + esc(r.time));
+      showDone(r);
     } catch (e) {
       show('err', '서버에 연결하지 못했습니다. 잠시 뒤 출석하기를 다시 눌러 주세요.');
       resetButton();

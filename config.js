@@ -7,6 +7,23 @@ window.attendApi = async function (data) {
   return r.json();
 };
 
+// 오늘의 색: 날짜(한국 시간)마다 바뀌고, 교수 화면과 학생 화면에 같은 색이 나온다.
+// 이웃한 날은 항상 다른 색이 되도록 7가지를 차례로 돈다.
+window.todayColor = function () {
+  const colors = [
+    { hex: '#0F6E56', name: '청록' }, { hex: '#185FA5', name: '파랑' },
+    { hex: '#534AB7', name: '보라' }, { hex: '#B5470F', name: '주황' },
+    { hex: '#993556', name: '분홍' }, { hex: '#3B6D11', name: '초록' },
+    { hex: '#5F5E5A', name: '회색' },
+  ];
+  const day = Math.floor((Date.now() + 9 * 3600 * 1000) / 86400000);
+  return colors[day % colors.length];
+};
+
+window.kstClock = function () {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(11, 19); // 한국 시간 HH:MM:SS
+};
+
 window.attendStore = function (k, v) {
   try {
     if (v === undefined) return localStorage.getItem(k);
