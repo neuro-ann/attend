@@ -30,8 +30,6 @@
   .side { display: flex; flex-direction: column; gap: 22px; min-width: 240px; }
   .tile { border-radius: 16px; padding: 20px 24px; }
   .tile .lab { font-size: 18px; margin: 0; }
-  .color { color: #fff; }
-  .color .val { font-size: 46px; font-weight: 800; margin: 4px 0 0; }
   .countTile { background: var(--soft); }
   .countTile .val { font-size: 64px; font-weight: 800; margin: 2px 0 0; font-variant-numeric: tabular-nums; }
   .countTile .val small { font-size: 26px; font-weight: 700; margin-left: 4px; }
@@ -66,10 +64,6 @@
       <p class="guide">휴대전화 기본 카메라로 찍으세요 · 10초마다 바뀜</p>
     </div>
     <div class="side">
-      <div class="tile color" id="colorTile">
-        <p class="lab">오늘의 색</p>
-        <p class="val" id="colorName"></p>
-      </div>
       <div class="tile countTile">
         <p class="lab">출석</p>
         <p class="val"><span id="count">0</span><small>명</small></p>
@@ -102,7 +96,7 @@
   // 휴대전화 카메라가 화면의 QR 코드를 잘 읽도록 한 칸의 크기를 정수 픽셀로 맞추고
   // 둘레에 칸 4개 너비의 흰 여백을 둔다.
   function drawQr(url) {
-    const target = Math.max(300, Math.min(800, Math.floor(Math.min(innerWidth * 0.6, innerHeight * 0.82))));
+    const target = Math.max(300, Math.min(800, Math.floor(Math.min(innerWidth * 0.66, innerHeight * 0.82))));
     const box = $('qr');
     box.innerHTML = '';
     let qr = new QRCode(box, { text: url, width: target, height: target, correctLevel: QRCode.CorrectLevel.L });
@@ -114,13 +108,9 @@
     $('timerBox').style.width = (cell * (n + 8)) + 'px';
   }
 
-  function paintColor() {
-    const c = window.todayColor();
-    $('colorTile').style.background = c.hex;
-    $('colorName').textContent = c.name;
-    $('clock').textContent = window.kstClock();
-  }
-  paintColor(); setInterval(paintColor, 1000);
+  // 학생 화면의 시계와 비교할 수 있도록 현재 시각을 초 단위로 보여 준다.
+  function paintClock() { $('clock').textContent = window.kstClock(); }
+  paintClock(); setInterval(paintClock, 1000);
 
   function runTimer(slotEnd) {
     const left = Math.max(0, slotEnd - (Date.now() + offset));
