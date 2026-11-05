@@ -87,7 +87,7 @@
   const $ = id => document.getElementById(id);
   const api = window.attendApi, store = window.attendStore;
   // 주소를 짧게 할수록 QR 코드의 칸 수가 줄어 칸 하나가 커지고 휴대전화가 읽기 쉬워진다.
-  const studentUrl = new URL('./', location.href).href;
+  const studentUrl = window.STUDENT_URL || new URL('./', location.href).href;
   let key = store('gast_admin') || '';
   let offset = 0, timer = null;
 
@@ -187,14 +187,17 @@
 
   $('room').onclick = () => {
     if (!navigator.geolocation) return say('이 브라우저는 위치 확인을 지원하지 않습니다.');
+    // 데스크톱·노트북은 GPS가 없어 위치가 수 km까지 틀릴 수 있으므로 휴대전화에서만 저장한다.
+    if (!navigator.maxTouchPoints) return say('강의실 위치는 강의실에서 휴대전화로 저장해 주세요.');
     say('위치를 확인하는 중입니다.');
     navigator.geolocation.getCurrentPosition(async p => {
       const acc = Math.round(p.coords.accuracy);
+      if (acc > 100) return say('위치를 정확히 잡지 못해 저장하지 않았습니다. 강의실에서 휴대전화로 다시 눌러 주세요.');
+      if (!confirm('지금 위치를 강의실로 저장할까요? 기존 강의실 좌표는 지워집니다.')) return say('');
       try {
         const r = await api({ action: 'adminRoom', key: key, lat: p.coords.latitude, lng: p.coords.longitude });
         if (!r.ok) return say(r.msg);
-        say('강의실 위치를 저장했습니다. 오차 약 ' + acc + 'm' +
-            (acc > 100 ? '\n오차가 큽니다. 구글 지도에서 강의실 건물 좌표를 확인해 설정 시트에 직접 넣는 편이 정확합니다.' : ''));
+        say('강의실 위치를 저장했습니다.');
         tick();
       } catch (e) { say('서버에 연결하지 못했습니다.'); }
     }, () => say('위치를 확인하지 못했습니다. 브라우저의 위치 권한을 허용해 주세요.'),
