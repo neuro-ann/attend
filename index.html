@@ -24,22 +24,27 @@
   .msg.ok { background: var(--okbg); color: var(--ok); }
   .msg.err { background: var(--errbg); color: var(--err); }
   .big { display: block; font-size: 28px; font-weight: 800; margin-bottom: 4px; }
-  #done { position: fixed; inset: 0; color: #fff; display: flex; flex-direction: column;
-          align-items: center; justify-content: center; text-align: center; padding: 24px 16px; }
+  #done { position: fixed; inset: 0; color: #1d3a5f; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; text-align: center; padding: 24px 16px; overflow: hidden;
+          background: linear-gradient(180deg, #a9d8f5 0%, #d4ecfb 55%, #f3f9fe 100%); }
   #done[hidden] { display: none; }
-  .mark { width: 84px; height: 84px; border-radius: 50%; border: 5px solid rgba(255,255,255,.9);
-          display: flex; align-items: center; justify-content: center; }
-  .mark svg { width: 46px; height: 46px; }
-  .d-title { font-size: 30px; font-weight: 800; margin: 18px 0 0; }
-  .d-name { font-size: 40px; font-weight: 800; margin: 10px 0 0; letter-spacing: 0.02em; }
-  .d-at { font-size: 17px; margin: 6px 0 0; opacity: .9; }
-  .d-clock { font-size: 56px; font-weight: 800; margin: 34px 0 0; font-variant-numeric: tabular-nums;
+  #done > p, #done > .cloud { position: relative; z-index: 1; }
+  .sky { position: absolute; inset: 0; pointer-events: none; }
+  .sky svg { position: absolute; left: 0; fill: #fff; animation: drift linear infinite; }
+  .cloud { width: 170px; height: 110px; flex-shrink: 0; animation: float 3s ease-in-out infinite;
+           filter: drop-shadow(0 6px 10px rgba(60,110,160,.18)); }
+  .cloud .eye { transform-box: fill-box; transform-origin: center; animation: wink 4s infinite; }
+  .d-title { font-size: 28px; font-weight: 800; margin: 18px 0 0; }
+  .d-name { font-size: 40px; font-weight: 800; margin: 8px 0 0; letter-spacing: 0.02em; }
+  .d-clock { font-size: 52px; font-weight: 800; margin: 28px 0 0; font-variant-numeric: tabular-nums;
              font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  .d-live { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; margin: 4px 0 0; }
-  .d-live i { width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
-  .d-color { margin: 30px 0 0; font-size: 17px; padding: 10px 18px; border-radius: 999px;
-             background: rgba(255,255,255,.18); }
+  .d-live { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; margin: 2px 0 0; opacity: .9; }
+  .d-live i { width: 9px; height: 9px; border-radius: 50%; background: #3f7fc4; animation: blink 1s infinite; }
+  .d-bye { font-size: 22px; font-weight: 700; margin: 30px 0 0; }
   @keyframes blink { 50% { opacity: .2; } }
+  @keyframes float { 50% { transform: translateY(-10px); } }
+  @keyframes drift { from { transform: translateX(-260px); } to { transform: translateX(110vw); } }
+  @keyframes wink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
 </style>
 </head>
 <body>
@@ -62,13 +67,23 @@
 </main>
 
 <div id="done" hidden>
-  <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-  <p class="d-title" id="dTitle">출석 완료</p>
+  <div class="sky" id="sky"></div>
+  <svg class="cloud" viewBox="0 0 170 110" aria-hidden="true">
+    <g fill="#fff">
+      <circle cx="58" cy="52" r="30"/><circle cx="98" cy="42" r="36"/><circle cx="130" cy="64" r="26"/>
+      <circle cx="36" cy="72" r="22"/><rect x="36" y="58" width="100" height="36" rx="18"/>
+    </g>
+    <ellipse class="eye" cx="72" cy="62" rx="5" ry="7" fill="#2c2c2a"/>
+    <ellipse class="eye" cx="104" cy="62" rx="5" ry="7" fill="#2c2c2a"/>
+    <ellipse cx="60" cy="76" rx="8" ry="5" fill="#f4a7b9"/>
+    <ellipse cx="116" cy="76" rx="8" ry="5" fill="#f4a7b9"/>
+    <path d="M80 74 Q88 83 96 74" fill="none" stroke="#2c2c2a" stroke-width="3.5" stroke-linecap="round"/>
+  </svg>
+  <p class="d-title" id="dTitle">출석이 인정되었습니다</p>
   <p class="d-name" id="dName"></p>
-  <p class="d-at" id="dAt"></p>
   <p class="d-clock" id="dClock"></p>
   <p class="d-live"><i></i>현재 시각</p>
-  <p class="d-color" id="dColor"></p>
+  <p class="d-bye">좋은 하루 되세요</p>
 </div>
 
 <script src="config.js"></script>
@@ -123,17 +138,21 @@
     $('formCard').hidden = false;
   })();
 
-  // 출석에 성공하면 화면 전체를 오늘의 색으로 바꾸고 현재 시각을 초 단위로 보여 준다.
-  // 교수가 화면을 보고 강의실 화면의 색과 같은지, 시계가 움직이는지 확인할 수 있다.
+  // 출석에 성공하면 구름이 떠다니는 하늘 화면으로 바꾸고 현재 시각을 초 단위로 보여 준다.
+  // 교수가 화면을 보고 시계가 움직이는지(캡처한 사진이 아닌지) 확인할 수 있다.
   function showDone(r) {
-    const c = window.todayColor();
-    document.body.style.background = c.hex;
-    document.querySelector('meta[name=viewport]').insertAdjacentHTML('afterend', '<meta name="theme-color" content="' + c.hex + '">');
-    $('done').style.background = c.hex;
-    $('dTitle').textContent = r.already ? '이미 출석되어 있습니다' : '출석 완료';
+    document.body.style.background = '#a9d8f5';
+    document.querySelector('meta[name=viewport]').insertAdjacentHTML('afterend', '<meta name="theme-color" content="#a9d8f5">');
+    const shape = '<g><circle cx="58" cy="52" r="30"/><circle cx="98" cy="42" r="36"/><circle cx="130" cy="64" r="26"/>' +
+      '<circle cx="36" cy="72" r="22"/><rect x="36" y="58" width="100" height="36" rx="18"/></g>';
+    // [위쪽 위치 %, 너비 px, 흐르는 시간 초, 시작 시점 초, 투명도]
+    [[6, 150, 38, -5, .9], [20, 90, 52, -30, .7], [34, 120, 44, -18, .55],
+     [58, 160, 60, -42, .8], [74, 100, 40, -12, .65], [88, 130, 56, -26, .85]].forEach(c => {
+      $('sky').insertAdjacentHTML('beforeend', '<svg viewBox="0 0 170 110" style="top:' + c[0] + '%;width:' + c[1] +
+        'px;animation-duration:' + c[2] + 's;animation-delay:' + c[3] + 's;opacity:' + c[4] + '">' + shape + '</svg>');
+    });
+    $('dTitle').textContent = r.already ? '이미 출석되어 있습니다' : '출석이 인정되었습니다';
     $('dName').textContent = r.name;
-    $('dAt').textContent = '출석 시각 ' + r.time;
-    $('dColor').textContent = '오늘의 색: ' + c.name;
     const tickClock = () => { $('dClock').textContent = window.kstClock(); };
     tickClock(); setInterval(tickClock, 1000);
     $('done').hidden = false;
